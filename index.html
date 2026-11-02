@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資産負債スナップショット</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen p-4">
+  <div class="max-w-3xl mx-auto">
+    <h1 class="text-2xl font-bold text-emerald-400 mb-1">資産負債スナップショット</h1>
+    <p class="text-gray-400 text-sm mb-6">資産と負債を入力して純資産を可視化。家計バランスシートを一目で確認できます。</p>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      <div class="bg-gray-900 rounded-xl p-4 text-center">
+        <div class="text-xs text-gray-400 mb-1">総資産</div>
+        <div id="totalAssets" class="text-2xl font-bold text-emerald-400">0</div>
+        <div class="text-xs text-gray-500">万円</div>
+      </div>
+      <div class="bg-gray-900 rounded-xl p-4 text-center">
+        <div class="text-xs text-gray-400 mb-1">総負債</div>
+        <div id="totalLiabilities" class="text-2xl font-bold text-red-400">0</div>
+        <div class="text-xs text-gray-500">万円</div>
+      </div>
+      <div class="bg-gray-900 rounded-xl p-4 text-center">
+        <div class="text-xs text-gray-400 mb-1">純資産</div>
+        <div id="netWorth" class="text-2xl font-bold text-blue-300">0</div>
+        <div class="text-xs text-gray-500">万円</div>
+      </div>
+    </div>
+
+    <!-- Visual Bar -->
+    <div class="bg-gray-900 rounded-xl p-5 mb-6">
+      <h2 class="text-sm font-semibold text-gray-300 mb-3">資産カテゴリ内訳</h2>
+      <div id="assetBar" class="flex h-8 rounded overflow-hidden mb-2"></div>
+      <div id="assetLegend" class="flex flex-wrap gap-3 text-xs text-gray-400 mb-4"></div>
+      <div class="flex h-4 rounded overflow-hidden mb-1">
+        <div id="assetFill" class="bg-emerald-500 transition-all" style="width:50%"></div>
+        <div id="liabFill" class="bg-red-500 transition-all" style="width:50%"></div>
+      </div>
+      <div class="flex justify-between text-xs text-gray-500">
+        <span>資産</span><span>負債</span>
+      </div>
+    </div>
+
+    <!-- Two Column Input -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Assets -->
+      <div class="bg-gray-900 rounded-xl p-4">
+        <h2 class="text-sm font-semibold text-emerald-400 mb-3">資産を追加</h2>
+        <div class="space-y-2 mb-3">
+          <input id="assetName" type="text" placeholder="項目名（例：普通預金）"
+            class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+            aria-label="資産項目名">
+          <input id="assetAmount" type="number" placeholder="金額（万円）" min="0"
+            class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+            aria-label="資産金額">
+          <select id="assetCat" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+            aria-label="資産カテゴリ">
+            <option value="現金">現金</option>
+            <option value="投資">投資</option>
+            <option value="不動産">不動産</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <button onclick="addAsset()"
+          class="w-full bg-emerald-700 hover:bg-emerald-600 rounded py-2 text-sm font-semibold transition"
+          aria-label="資産を追加">＋ 資産追加</button>
+        <ul id="assetList" class="mt-3 space-y-1 max-h-52 overflow-y-auto"></ul>
+      </div>
+
+      <!-- Liabilities -->
+      <div class="bg-gray-900 rounded-xl p-4">
+        <h2 class="text-sm font-semibold text-red-400 mb-3">負債を追加</h2>
+        <div class="space-y-2 mb-3">
+          <input id="liabName" type="text" placeholder="項目名（例：住宅ローン）"
+            class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+            aria-label="負債項目名">
+          <input id="liabAmount" type="number" placeholder="金額（万円）" min="0"
+            class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+            aria-label="負債金額">
+          <select id="liabCat" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+            aria-label="負債カテゴリ">
+            <option value="ローン">ローン</option>
+            <option value="カード">カード</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <button onclick="addLiability()"
+          class="w-full bg-red-800 hover:bg-red-700 rounded py-2 text-sm font-semibold transition"
+          aria-label="負債を追加">＋ 負債追加</button>
+        <ul id="liabList" class="mt-3 space-y-1 max-h-52 overflow-y-auto"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    const CAT_COLORS = { '現金':'#34d399','投資':'#60a5fa','不動産':'#f59e0b','その他':'#a78bfa' };
+    let assets = [], liabilities = [];
+
+    function load() {
+      assets = JSON.parse(localStorage.getItem('als_assets') || '[]');
+      liabilities = JSON.parse(localStorage.getItem('als_liabs') || '[]');
+      render();
+    }
+
+    function save() {
+      localStorage.setItem('als_assets', JSON.stringify(assets));
+      localStorage.setItem('als_liabs', JSON.stringify(liabilities));
+    }
+
+    function addAsset() {
+      const n = document.getElementById('assetName').value.trim();
+      const a = parseFloat(document.getElementById('assetAmount').value);
+      const c = document.getElementById('assetCat').value;
+      if (!n || isNaN(a) || a <= 0) return;
+      assets.push({ id: Date.now(), name: n, amount: a, cat: c });
+      document.getElementById('assetName').value = '';
+      document.getElementById('assetAmount').value = '';
+      save(); render();
+    }
+
+    function addLiability() {
+      const n = document.getElementById('liabName').value.trim();
+      const a = parseFloat(document.getElementById('liabAmount').value);
+      const c = document.getElementById('liabCat').value;
+      if (!n || isNaN(a) || a <= 0) return;
+      liabilities.push({ id: Date.now(), name: n, amount: a, cat: c });
+      document.getElementById('liabName').value = '';
+      document.getElementById('liabAmount').value = '';
+      save(); render();
+    }
+
+    function removeAsset(id) { assets = assets.filter(x => x.id !== id); save(); render(); }
+    function removeLiab(id) { liabilities = liabilities.filter(x => x.id !== id); save(); render(); }
+
+    function render() {
+      const totalA = assets.reduce((s, x) => s + x.amount, 0);
+      const totalL = liabilities.reduce((s, x) => s + x.amount, 0);
+      const net = totalA - totalL;
+
+      document.getElementById('totalAssets').textContent = totalA.toLocaleString();
+      document.getElementById('totalLiabilities').textContent = totalL.toLocaleString();
+      const nw = document.getElementById('netWorth');
+      nw.textContent = net.toLocaleString();
+      nw.className = `text-2xl font-bold ${net >= 0 ? 'text-blue-300' : 'text-red-400'}`;
+
+      // Asset stacked bar by category
+      const catTotals = {};
+      assets.forEach(a => { catTotals[a.cat] = (catTotals[a.cat] || 0) + a.amount; });
+      const bar = document.getElementById('assetBar');
+      const legend = document.getElementById('assetLegend');
+      bar.innerHTML = ''; legend.innerHTML = '';
+      if (totalA > 0) {
+        Object.entries(catTotals).forEach(([cat, val]) => {
+          const pct = (val / totalA * 100).toFixed(1);
+          const seg = document.createElement('div');
+          seg.style.cssText = `width:${pct}%;background:${CAT_COLORS[cat]||'#9ca3af'}`;
+          seg.title = `${cat}: ${val}万円`;
+          bar.appendChild(seg);
+          const li = document.createElement('span');
+          li.innerHTML = `<span style="color:${CAT_COLORS[cat]||'#9ca3af'}">■</span> ${cat} ${val}万`;
+          legend.appendChild(li);
+        });
+      } else {
+        bar.innerHTML = '<div class="w-full bg-gray-700 h-full rounded"></div>';
+      }
+
+      // Asset vs Liability bar
+      const total = totalA + totalL || 1;
+      document.getElementById('assetFill').style.width = (totalA / total * 100) + '%';
+      document.getElementById('liabFill').style.width = (totalL / total * 100) + '%';
+
+      // Asset list
+      const al = document.getElementById('assetList');
+      al.innerHTML = assets.map(a => `
+        <li class="flex justify-between items-center bg-gray-800 rounded px-2 py-1 text-xs">
+          <span class="truncate mr-2"><span class="text-emerald-400 mr-1">[${a.cat}]</span>${esc(a.name)}</span>
+          <span class="text-emerald-300 mr-2 whitespace-nowrap">${a.amount}万</span>
+          <button onclick="removeAsset(${a.id})" class="text-gray-500 hover:text-red-400" aria-label="削除">✕</button>
+        </li>`).join('');
+
+      // Liab list
+      const ll = document.getElementById('liabList');
+      ll.innerHTML = liabilities.map(l => `
+        <li class="flex justify-between items-center bg-gray-800 rounded px-2 py-1 text-xs">
+          <span class="truncate mr-2"><span class="text-red-400 mr-1">[${l.cat}]</span>${esc(l.name)}</span>
+          <span class="text-red-300 mr-2 whitespace-nowrap">${l.amount}万</span>
+          <button onclick="removeLiab(${l.id})" class="text-gray-500 hover:text-red-400" aria-label="削除">✕</button>
+        </li>`).join('');
+    }
+
+    load();
+  </script>
+</body>
+</html>
